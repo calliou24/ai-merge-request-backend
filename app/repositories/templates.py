@@ -1,7 +1,6 @@
 
 
 from sqlalchemy import select
-import sqlalchemy
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.templates import Templates
@@ -30,3 +29,12 @@ async def get_template(db: AsyncSession, template_id: int) -> Templates | None :
 async def deleteTemplate(db: AsyncSession, template: Templates): 
     template.soft_delete()
     await db.commit()
+
+async def getAllTemplates(db: AsyncSession) -> list[Templates]:
+    templates = await db.execute(
+        select(Templates).where(
+            Templates.deleted_at.is_(None)
+        )
+    )
+
+    return templates.scalars().all()

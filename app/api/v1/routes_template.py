@@ -11,7 +11,11 @@ from app.schemas.templates import TemplateCreate, TemplateRead
 from app.repositories import templates
 
 
-router_templates = APIRouter(prefix="/template")
+router_templates = APIRouter(prefix="/templates")
+
+@router_templates.get('', response_model=list[TemplateRead], status_code=HTTP_200_OK)
+async def getAllTemplates(db: AsyncSession = Depends(get_db)): 
+    return await templates.getAllTemplates(db)
 
 @router_templates.post("", response_model=TemplateRead, status_code=status.HTTP_201_CREATED)
 async def create_template(template_input: TemplateCreate ,db: AsyncSession = Depends(get_db)): 
