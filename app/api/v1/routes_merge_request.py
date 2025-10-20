@@ -10,6 +10,7 @@ from starlette.status import (
     HTTP_404_NOT_FOUND,
     HTTP_500_INTERNAL_SERVER_ERROR,
 )
+from app.core.config import settings
 from app.db.session import get_db
 
 from app.models.ai_providers import ProvidersTypes
@@ -24,7 +25,7 @@ router_merge = APIRouter(prefix="/merge-request")
 def process_with_open_router(model: str, messages: []):
     client = openai.OpenAI(
         base_url="https://openrouter.ai/api/v1",
-        api_key="",
+        api_key=settings.OPEN_ROUTER_API_KEY,
     )
 
     llm_response = client.chat.completions.create(model=model, messages=messages)
@@ -33,7 +34,7 @@ def process_with_open_router(model: str, messages: []):
 
 
 def process_with_cerebras(model: str, messages: []):
-    client = Cerebras(api_key="")
+    client = Cerebras(api_key=settings.CEREBRAS_API_KEY)
 
     llm_response = client.chat.completions.create(
         messages=messages,
