@@ -15,6 +15,18 @@ async def create_model(db: AsyncSession, create_model: CreateModelInput) -> AI_M
     return ai_model
 
 
+async def get_model(
+    db: AsyncSession, model_input: CreateModelInput
+) -> AI_Models | None:
+    model = await db.execute(
+        select(AI_Models).where(
+            AI_Models.name == model_input.name, AI_Models.deleted_at.is_(None)
+        )
+    )
+
+    return model.scalar_one_or_none()
+
+
 async def get_all_models(db: AsyncSession) -> list[AI_Models]:
     models = await db.execute(select(AI_Models).where(AI_Models.deleted_at.is_(None)))
 

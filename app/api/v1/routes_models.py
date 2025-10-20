@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.status import HTTP_200_OK, HTTP_201_CREATED
+from starlette.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_409_CONFLICT
 
 from app.db.session import get_db
 
@@ -15,6 +15,14 @@ router_models = APIRouter(prefix="/ai-model")
 async def create_model(
     model_input: CreateModelInput, db: AsyncSession = Depends(get_db)
 ):
+
+    model = await models.get_model(db, model_input)
+    if model is not None:
+        raise HTTPException(
+            status_code=HTTP_409_CONFLICT,
+            detail=f"Model with the name: {model_input.name} already exist",
+        )
+
     return await models.create_model(db, model_input)
 
 
