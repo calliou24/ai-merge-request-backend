@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends
-from starlette.status import HTTP_200_OK, HTTP_201_CREATED
+from fastapi import APIRouter, Depends, HTTPException
+from starlette.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_409_CONFLICT
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -14,6 +14,14 @@ router_providers = APIRouter(prefix="/ai-provider")
 async def create_provider(
     provider_input: CreateProviderInput, db: AsyncSession = Depends(get_db)
 ):
+    provider = await providers.get_provider_by_name(db, provider_input)
+
+    if provider is not None:
+        raise HTTPException(
+            status_code=HTTP_409_CONFLICT,
+            detail=f"Provider with name: {provider.name} and type: {provider.type.value} already exisst",
+        )
+
     return await providers.create_provider(db, provider_input)
 
 

@@ -17,6 +17,19 @@ async def create_provider(
     return provider
 
 
+async def get_provider_by_name(
+    db: AsyncSession, provider_input: CreateProviderInput
+) -> AI_Providers | None:
+    provider = await db.execute(
+        select(AI_Providers).where(
+            AI_Providers.name == provider_input.name,
+            AI_Providers.deleted_at.is_(None),
+        )
+    )
+
+    return provider.scalar_one_or_none()
+
+
 async def get_all_providers(db: AsyncSession) -> list[AI_Providers]:
     providers = await db.execute(
         select(AI_Providers).where(AI_Providers.deleted_at.is_(None))
