@@ -1,19 +1,18 @@
-
-
-from fastapi import  FastAPI
+from fastapi import FastAPI
+from app.api.v1.routes_merge_request import router_merge
 from app.api.v1.routes_status import status_router
 from app.api.v1.routes_template import router_templates
 from app.core.config import settings
 
 
-app= FastAPI(title=settings.APP_NAME)
+app = FastAPI(title=settings.APP_NAME)
 
-routers_v1 = [status_router, router_templates]
+routers_v1 = [status_router, router_templates, router_merge]
 
-for router in routers_v1: 
-    app.include_router(router, prefix='/api/v1')
+for router in routers_v1:
+    app.include_router(router, prefix="/api/v1")
+
 
 @app.get("/")
-def root(): 
+def root():
     return {"message": "Hello worlds"}
-
