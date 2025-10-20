@@ -30,6 +30,16 @@ async def get_provider_by_name(
     return provider.scalar_one_or_none()
 
 
+async def get_provider_by_id(db: AsyncSession, provider_id: int) -> AI_Providers:
+    provider = await db.execute(
+        select(AI_Providers).where(
+            AI_Providers.id == provider_id, AI_Providers.deleted_at.is_(None)
+        )
+    )
+
+    return provider.scalar_one_or_none()
+
+
 async def get_all_providers(db: AsyncSession) -> list[AI_Providers]:
     providers = await db.execute(
         select(AI_Providers).where(AI_Providers.deleted_at.is_(None))

@@ -10,6 +10,9 @@ class MergeRequestInput(BaseModel):
     pat: str
     template_id: int
 
+    provider_id: int
+    model: str
+
 
 class MergeRequestInfoResponse(BaseModel):
     title: str

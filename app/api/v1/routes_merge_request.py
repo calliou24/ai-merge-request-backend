@@ -5,27 +5,52 @@ from cerebras.cloud.sdk import Cerebras
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.status import HTTP_404_NOT_FOUND
+from starlette.status import (
+    HTTP_400_BAD_REQUEST,
+    HTTP_404_NOT_FOUND,
+    HTTP_500_INTERNAL_SERVER_ERROR,
+)
 from app.db.session import get_db
-from app.schemas.defaults import SuccessResponse
+
+from app.models.ai_providers import ProvidersTypes
 from app.schemas.merge_request import MergeRequestInfoResponse, MergeRequestInput
 
-from app.repositories import templates
+from app.repositories import templates, providers, models
 
 
 router_merge = APIRouter(prefix="/merge-request")
 
 
-def get_ai_mr_data(diffs: str, template: str, title: str, user_context: str):
-    # client = openai.OpenAI(
-    #     # base_url="https://openrouter.ai/api/v1",
-    #     # api_key="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",
-    #     base_url="https://api.z.ai/api/paas/v4/",
-    #     api_key="d3e301690e5c4984877e6d8fa1d4eeba.6aJC1b7JUCdCpmfa",
-    # )
+def process_with_open_router(model: str, messages: []):
+    client = openai.OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key="",
+    )
 
-    client = Cerebras(api_key="csk-pnw8vwx4wrrx3e5xddckjf298m94h9xj8hf6fpkf2pc59t23")
+    llm_response = client.chat.completions.create(model=model, messages=messages)
 
+    return llm_response
+
+
+def process_with_cerebras(model: str, messages: []):
+    client = Cerebras(api_key="")
+
+    llm_response = client.chat.completions.create(
+        messages=messages,
+        model=model,
+    )
+
+    return llm_response
+
+
+def get_ai_mr_data(
+    diffs: str,
+    template: str,
+    title: str,
+    user_context: str,
+    provider_type: ProvidersTypes,
+    model: str,
+):
     system_prompt = f"""
         You are an assistant that writes GitLab Merge Request (MR) titles and descriptions based on provided information.
         You must not make network calls, execute tools, or include anything outside the strict output format.
@@ -148,14 +173,15 @@ def get_ai_mr_data(diffs: str, template: str, title: str, user_context: str):
         {"role": "user", "content": user_message},
     ]
 
-    llm_response = client.chat.completions.create(
-        # model="openai/gpt-oss-20b:free", messages=messages
-        # model="moonshotai/kimi-dev-72b:free",
-        messages=messages,
-        model="gpt-oss-120b",
-    )
+    if provider_type == ProvidersTypes.open_router:
+        llm_response = process_with_open_router(model, messages)
+    elif provider_type == ProvidersTypes.cerebras:
+        llm_response = process_with_cerebras(model, messages)
 
-    return llm_response.choices[0].message.content
+    try:
+        return llm_response.choices[0].message.content
+    except (AttributeError, IndexError, KeyError):
+        return None
 
 
 def extract_section(text, start_tag, end_tag):
@@ -219,6 +245,27 @@ def build_optimized_diffs(compare):
 async def create_merge_request_with_ai(
     merge_request_input: MergeRequestInput, db: AsyncSession = Depends(get_db)
 ):
+    provider = await providers.get_provider_by_id(db, merge_request_input.provider_id)
+
+    if provider is None:
+        raise HTTPException(
+            status_code=HTTP_404_NOT_FOUND,
+            detail=f"Provider with id: {merge_request_input.provider_id} not found",
+        )
+
+    model = await models.get_model(db, merge_request_input.model)
+
+    if model is None:
+        raise HTTPException(
+            status_code=HTTP_404_NOT_FOUND,
+            derail=f"Model {merge_request_input.model} not found",
+        )
+
+    if model.provider_id is not provider.id:
+        raise HTTPException(
+            status_code=HTTP_400_BAD_REQUEST,
+            detail=f"The Model {merge_request_input.model} is not from the Provider{provider.name}",
+        )
 
     template = await templates.get_template(db, merge_request_input.template_id)
 
@@ -238,7 +285,15 @@ async def create_merge_request_with_ai(
         template.template,
         template.title,
         merge_request_input.context_ai,
+        provider.type,
+        model.name,
     )
+
+    if mr_data is None:
+        raise HTTPException(
+            status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error calling ai api provider. Try again later",
+        )
 
     title = extract_section(mr_data, "[title:start]", "[title:end]")
     description = extract_section(mr_data, "[description:start]", "[description:end]")
