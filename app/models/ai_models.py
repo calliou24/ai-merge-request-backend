@@ -11,4 +11,4 @@ class AI_Models(Base, TimestampMixin, SoftDeleteMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, unique=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     provider_id: Mapped[int] = mapped_column(ForeignKey("ai_providers.id"))
-    provider: Mapped[AI_Providers] = relationship(back_populates="models")
+    provider: Mapped[AI_Providers] = relationship()

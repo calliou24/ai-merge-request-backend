@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from app.api.v1.routes_merge_request import router_merge
+from app.api.v1.routes_providers import router_providers
 from app.api.v1.routes_status import status_router
 from app.api.v1.routes_template import router_templates
 from app.core.config import settings
@@ -7,7 +8,7 @@ from app.core.config import settings
 
 app = FastAPI(title=settings.APP_NAME)
 
-routers_v1 = [status_router, router_templates, router_merge]
+routers_v1 = [status_router, router_templates, router_merge, router_providers]
 
 for router in routers_v1:
     app.include_router(router, prefix="/api/v1")
