@@ -1,8 +1,16 @@
 from enum import Enum
-from pydantic import BaseModel
-
+from pydantic import BaseModel, constr
 
 class MergeRequestInput(BaseModel):
+    project_id: int
+    origin_branch: constr(min_length=1)
+    target_branch: constr(min_length=1) 
+    title: constr(min_length=1) 
+    description: constr(min_length=1)
+    pat: constr(min_length=10)
+
+
+class MergeRequestDataAiInput(BaseModel):
     project_id: int
     origin_branch: str
     target_branch: str
@@ -17,3 +25,7 @@ class MergeRequestInput(BaseModel):
 class MergeRequestInfoResponse(BaseModel):
     title: str
     description: str
+
+class CreatedMergeRequestResponse(BaseModel):
+    merge_request_id: int
+    message: str

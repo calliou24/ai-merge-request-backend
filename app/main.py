@@ -6,6 +6,9 @@ from app.api.v1.routes_status import status_router
 from app.api.v1.routes_template import router_templates
 from app.core.config import settings
 
+# cors
+from fastapi.middleware.cors import CORSMiddleware
+
 
 app = FastAPI(title=settings.APP_NAME)
 
@@ -19,6 +22,18 @@ routers_v1 = [
 
 for router in routers_v1:
     app.include_router(router, prefix="/api/v1")
+
+origins = [
+    "*",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/")

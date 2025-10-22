@@ -5,8 +5,11 @@ from cerebras.cloud.sdk import Cerebras
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import merge_frozen_result
 from starlette.status import (
+    HTTP_200_OK,
     HTTP_400_BAD_REQUEST,
+    HTTP_401_UNAUTHORIZED,
     HTTP_404_NOT_FOUND,
     HTTP_500_INTERNAL_SERVER_ERROR,
 )
@@ -14,7 +17,7 @@ from app.core.config import settings
 from app.db.session import get_db
 
 from app.models.ai_providers import ProvidersTypes
-from app.schemas.merge_request import MergeRequestInfoResponse, MergeRequestInput
+from app.schemas.merge_request import CreatedMergeRequestResponse, MergeRequestDataAiInput, MergeRequestInfoResponse, MergeRequestInput
 
 from app.repositories import templates, providers, models
 
@@ -243,8 +246,8 @@ def build_optimized_diffs(compare):
 
 
 @router_merge.post("", response_model=MergeRequestInfoResponse)
-async def create_merge_request_with_ai(
-    merge_request_input: MergeRequestInput, db: AsyncSession = Depends(get_db)
+async def generate_merge_request_data(
+    merge_request_input: MergeRequestDataAiInput, db: AsyncSession = Depends(get_db)
 ):
     provider = await providers.get_provider_by_id(db, merge_request_input.provider_id)
 
@@ -303,3 +306,40 @@ async def create_merge_request_with_ai(
         title=title,
         description=description,
     )
+
+@router_merge.post("/create", response_model=CreatedMergeRequestResponse, status_code=HTTP_200_OK )
+async def create_merge_request(merge_request_input: MergeRequestInput, db:AsyncSession = Depends(get_db)):
+    try:
+        gl = gitlab.Gitlab("https://gitlab.com", private_token=merge_request_input.pat)
+    except gitlab.GitlabAuthenticationError:
+        raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail="Invalida gitlab personal access token") 
+    
+    try:
+        project = gl.projects.get(merge_request_input.project_id)
+    except gitlab.GitlabGetError as error:
+        if error.response_code == HTTP_404_NOT_FOUND:
+            raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=f"Project with id:{merge_request_input.project_id} was not found")
+        raise HTTPException(
+            status_code=error.response_code,
+            detail="Error obtaining the project"
+        )
+
+    try: 
+        merge_request = project.mergerequests.create({
+            "origin_branch": merge_request_input.origin_branch,
+            "target_branch": merge_request_input.target_branch,
+            "title": merge_request_input.title,
+            "description": merge_request_input.description
+        })
+    except gitlab.GitlabCreateError as error:
+        raise HTTPException(
+            status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creating merge request {str(error)}"
+        )
+    except Exception as error:
+        raise HTTPException(
+            status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creating merge request {str(error)}"
+        )
+
+    return CreatedMergeRequestResponse(merge_request_id=merge_request.get_id(), message="Merge request created successfully")
