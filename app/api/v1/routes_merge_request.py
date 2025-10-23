@@ -1,11 +1,10 @@
 import json
-import openai
+from openai import OpenAI
 import gitlab
 from cerebras.cloud.sdk import Cerebras
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import merge_frozen_result
 from starlette.status import (
     HTTP_200_OK,
     HTTP_400_BAD_REQUEST,
@@ -17,7 +16,12 @@ from app.core.config import settings
 from app.db.session import get_db
 
 from app.models.ai_providers import ProvidersTypes
-from app.schemas.merge_request import CreatedMergeRequestResponse, MergeRequestDataAiInput, MergeRequestInfoResponse, MergeRequestInput
+from app.schemas.merge_request import (
+    CreatedMergeRequestResponse,
+    MergeRequestDataAiInput,
+    MergeRequestInfoResponse,
+    MergeRequestInput,
+)
 
 from app.repositories import templates, providers, models
 
@@ -26,7 +30,7 @@ router_merge = APIRouter(prefix="/merge-request")
 
 
 def process_with_open_router(model: str, messages: []):
-    client = openai.OpenAI(
+    client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
         api_key=settings.OPEN_ROUTER_API_KEY,
     )
@@ -307,39 +311,54 @@ async def generate_merge_request_data(
         description=description,
     )
 
-@router_merge.post("/create", response_model=CreatedMergeRequestResponse, status_code=HTTP_200_OK )
-async def create_merge_request(merge_request_input: MergeRequestInput, db:AsyncSession = Depends(get_db)):
+
+@router_merge.post(
+    "/create", response_model=CreatedMergeRequestResponse, status_code=HTTP_200_OK
+)
+async def create_merge_request(
+    merge_request_input: MergeRequestInput, db: AsyncSession = Depends(get_db)
+):
     try:
         gl = gitlab.Gitlab("https://gitlab.com", private_token=merge_request_input.pat)
     except gitlab.GitlabAuthenticationError:
-        raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail="Invalida gitlab personal access token") 
-    
+        raise HTTPException(
+            status_code=HTTP_401_UNAUTHORIZED,
+            detail="Invalida gitlab personal access token",
+        )
+
     try:
         project = gl.projects.get(merge_request_input.project_id)
     except gitlab.GitlabGetError as error:
         if error.response_code == HTTP_404_NOT_FOUND:
-            raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=f"Project with id:{merge_request_input.project_id} was not found")
+            raise HTTPException(
+                status_code=HTTP_404_NOT_FOUND,
+                detail=f"Project with id:{merge_request_input.project_id} was not found",
+            )
         raise HTTPException(
-            status_code=error.response_code,
-            detail="Error obtaining the project"
+            status_code=error.response_code, detail="Error obtaining the project"
         )
 
-    try: 
-        merge_request = project.mergerequests.create({
-            "origin_branch": merge_request_input.origin_branch,
-            "target_branch": merge_request_input.target_branch,
-            "title": merge_request_input.title,
-            "description": merge_request_input.description
-        })
+    try:
+        merge_request = project.mergerequests.create(
+            {
+                "source_branch": merge_request_input.origin_branch,
+                "target_branch": merge_request_input.target_branch,
+                "title": merge_request_input.title,
+                "description": merge_request_input.description,
+            }
+        )
     except gitlab.GitlabCreateError as error:
         raise HTTPException(
             status_code=HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error creating merge request {str(error)}"
+            detail=f"Error creating merge request {str(error)}",
         )
     except Exception as error:
         raise HTTPException(
             status_code=HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error creating merge request {str(error)}"
+            detail=f"Error creating merge request {str(error)}",
         )
 
-    return CreatedMergeRequestResponse(merge_request_id=merge_request.get_id(), message="Merge request created successfully")
+    return CreatedMergeRequestResponse(
+        merge_request_id=merge_request.get_id(),
+        message="Merge request created successfully",
+    )
